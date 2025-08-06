@@ -1,0 +1,36 @@
+{
+  "name": "dev-server-orchestrator",
+  "version": "1.0.0",
+  "description": "OpenVSCode Dev Server Orchestrator - A web-based interface for managing OpenVSCode development servers",
+  "scripts": {
+    "install:backend": "cd backend && npm install",
+    "install:frontend": "cd frontend && npm install",
+    "install:all": "npm run install:backend && npm run install:frontend",
+    "start:backend": "cd backend && npm start",
+    "start:frontend": "cd frontend && npm start",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm start",
+    "build:frontend": "cd frontend && npm run build",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:dev": "docker-compose -f docker-compose.dev.yml up",
+    "docker:dev-build": "docker-compose -f docker-compose.dev.yml up --build",
+    "clean": "docker-compose down && docker system prune -f"
+  },
+  "keywords": [
+    "docker",
+    "openvscode",
+    "development",
+    "orchestrator",
+    "containers",
+    "react",
+    "nodejs",
+    "express"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
