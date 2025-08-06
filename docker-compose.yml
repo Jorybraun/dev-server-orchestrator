@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./repos:/app/repos
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+    depends_on:
+      - docker-proxy
+    networks:
+      - dev-orchestrator
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:3001
+    depends_on:
+      - backend
+    networks:
+      - dev-orchestrator
+
+  # Docker-in-Docker proxy for security
+  docker-proxy:
+    image: alpine/socat
+    command: tcp-listen:2375,fork,reuseaddr unix-connect:/var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - dev-orchestrator
+
+networks:
+  dev-orchestrator:
+    driver: bridge
+
+volumes:
+  repos-data:
