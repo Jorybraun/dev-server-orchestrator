@@ -54,6 +54,14 @@ The frontend provides:
 
 ## Quick Start
 
+### Prerequisites Check
+
+First, run the prerequisites check to ensure your system is ready:
+
+```bash
+./check-prerequisites.sh
+```
+
 ### Option 1: Using Docker Compose (Recommended)
 
 1. **Clone this repository**:
@@ -81,19 +89,28 @@ docker-compose -f docker-compose.dev.yml up
 
 ### Option 3: Local Development
 
-1. **Start the backend**:
+1. **Install dependencies**:
    ```bash
-   cd backend
-   npm install
-   npm run dev
+   npm run install:all
    ```
 
-2. **Start the frontend** (in a new terminal):
+2. **Start the backend** (in one terminal):
    ```bash
-   cd frontend
-   npm install
-   npm start
+   npm run dev:backend
    ```
+
+3. **Start the frontend** (in another terminal):
+   ```bash
+   npm run dev:frontend
+   ```
+
+### Testing
+
+Run the included test script to validate functionality:
+
+```bash
+./test.sh
+```
 
 ## Usage
 
@@ -186,6 +203,18 @@ The application uses the following Docker images:
 - **OpenVSCode Server**: `gitpod/openvscode-server:latest`
 - **Backend**: Node.js 18 Alpine
 - **Frontend**: Nginx Alpine (production) / Node.js 18 Alpine (development)
+
+## Helper Scripts
+
+The project includes several helper scripts for easier management:
+
+- `./check-prerequisites.sh` - Validates system requirements (Docker, Node.js, etc.)
+- `./test.sh` - Runs basic functionality tests
+- `npm run install:all` - Installs dependencies for both backend and frontend
+- `npm run docker:up` - Starts the application using Docker Compose
+- `npm run docker:dev` - Starts in development mode with hot reloading
+- `npm run docker:down` - Stops all Docker services
+- `npm run clean` - Stops services and cleans up Docker resources
 
 ## File Structure
 
