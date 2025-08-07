@@ -49,6 +49,30 @@ async function findAvailablePort(startPort = 8080) {
 }
 
 // API Routes
+// GET /api/dev-server/:sessionId/logs - Get logs for a dev server container
+app.get('/api/dev-server/:sessionId/logs', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = activeSessions.get(sessionId);
+    if (!session || !session.containerId) {
+      return res.status(404).json({ error: 'Session or container not found' });
+    }
+    const container = docker.getContainer(session.containerId);
+    // Fetch logs (stdout + stderr, tail last 200 lines)
+    const logsBuffer = await container.logs({
+      stdout: true,
+      stderr: true,
+      tail: 200,
+      timestamps: false
+    });
+    // logsBuffer can be a Buffer or string
+    const logs = Buffer.isBuffer(logsBuffer) ? logsBuffer.toString('utf8') : String(logsBuffer);
+    res.json({ logs });
+  } catch (error) {
+    console.error('Error fetching container logs:', error);
+    res.status(500).json({ error: 'Failed to fetch logs: ' + error.message });
+  }
+});
 
 // GET /api/dev-server - List active sessions
 app.get('/api/dev-server', async (req, res) => {
@@ -78,7 +102,6 @@ app.post('/api/dev-server', async (req, res) => {
     }
 
     const sessionId = uuidv4();
-    const sessionDir = path.join(REPOS_DIR, sessionId);
     const port = await findAvailablePort(8080);
 
     // Update session status
@@ -86,43 +109,75 @@ app.post('/api/dev-server', async (req, res) => {
       sessionId,
       repoUrl,
       port,
-      status: 'cloning',
-      containerId: null,
-      sessionDir
+      status: 'starting',
+      containerId: null
     });
 
-    // Clone repository
-    console.log(`Cloning repository ${repoUrl} to ${sessionDir}`);
-    const git = simpleGit();
-    await git.clone(repoUrl, sessionDir);
+    // Create and start Docker container that clones the repo itself
+    const openVSCodeImage = 'gitpod/openvscode-server:1.86.2';
+    console.log(`Creating OpenVSCode container for session ${sessionId} on port ${port} using image ${openVSCodeImage}`);
 
-    // Update session status
-    activeSessions.get(sessionId).status = 'starting';
-
-    // Create and start Docker container
-    console.log(`Creating OpenVSCode container for session ${sessionId} on port ${port}`);
-    
-    const container = await docker.createContainer({
-      Image: 'gitpod/openvscode-server:latest',
+    const containerConfig = {
+      Image: openVSCodeImage,
       name: `openvscode-${sessionId}`,
       HostConfig: {
         PortBindings: {
           '3000/tcp': [{ HostPort: port.toString() }]
-        },
-        Binds: [
-          `${sessionDir}:/home/workspace:rw`
-        ],
-        AutoRemove: true
+        }
+        // AutoRemove removed for debugging
       },
       Env: [
+        `REPO_URL=${repoUrl}`,
         'OPENVSCODE_SERVER_ROOT=/home/workspace',
         'OPENVSCODE_DISABLE_WELCOME_PAGE=true'
       ],
-      WorkingDir: '/home/workspace'
-    });
+      WorkingDir: '/home/workspace',
+      Entrypoint: ['/bin/sh', '-c', 'git clone "$REPO_URL" /home/workspace && /openvscode-server/bin/openvscode-server --host 0.0.0.0 --port 3000']
+    };
 
+    console.log('Container config:', JSON.stringify(containerConfig, null, 2));
+    const container = await docker.createContainer(containerConfig);
     await container.start();
-    
+
+    // Wait a moment, then check container status and logs
+    setTimeout(async () => {
+      try {
+        const inspect = await container.inspect();
+        if (inspect.State.Status !== 'running') {
+          // Container exited, fetch logs
+          const logsBuffer = await container.logs({ stdout: true, stderr: true, tail: 100, timestamps: false });
+          const logStr = Buffer.isBuffer(logsBuffer) ? logsBuffer.toString('utf8') : String(logsBuffer);
+          console.error(`Container for session ${sessionId} exited. Logs:\n${logStr}`);
+        } else {
+          // Try to validate the server is actually responding
+          const http = require('http');
+          const maxAttempts = 10;
+          let attempts = 0;
+          const checkUrl = `http://localhost:${port}`;
+          const check = () => {
+            http.get(checkUrl, res => {
+              if (res.statusCode === 200) {
+                console.log(`OpenVSCode server for session ${sessionId} is responding on port ${port}`);
+              } else {
+                retry();
+              }
+            }).on('error', retry);
+          };
+          const retry = () => {
+            attempts++;
+            if (attempts < maxAttempts) {
+              setTimeout(check, 1000);
+            } else {
+              console.error(`OpenVSCode server for session ${sessionId} did not respond on port ${port} after ${maxAttempts} attempts.`);
+            }
+          };
+          check();
+        }
+      } catch (err) {
+        console.error('Error inspecting/logging container:', err);
+      }
+    }, 2000);
+
     // Update session with container info
     const session = activeSessions.get(sessionId);
     session.containerId = container.id;

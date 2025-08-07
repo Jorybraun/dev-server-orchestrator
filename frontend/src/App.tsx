@@ -21,6 +21,11 @@ function App() {
   const [repoUrl, setRepoUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [logModalOpen, setLogModalOpen] = useState(false);
+  const [logSessionId, setLogSessionId] = useState<string | null>(null);
+  const [logs, setLogs] = useState<string>('');
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsError, setLogsError] = useState<string | null>(null);
 
   // Fetch sessions from API
   const fetchSessions = async () => {
@@ -79,6 +84,23 @@ function App() {
   // Open dev server in new tab
   const handleOpenServer = (port: number) => {
     window.open(`http://localhost:${port}`, '_blank');
+  };
+
+  // Fetch logs for a session
+  const handleViewLogs = async (sessionId: string) => {
+    setLogModalOpen(true);
+    setLogSessionId(sessionId);
+    setLogs('');
+    setLogsError(null);
+    setLogsLoading(true);
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/dev-server/${sessionId}/logs`);
+      setLogs(response.data.logs || 'No logs available.');
+    } catch (err: any) {
+      setLogsError(err.response?.data?.error || 'Failed to fetch logs');
+    } finally {
+      setLogsLoading(false);
+    }
   };
 
   return (
@@ -160,6 +182,12 @@ function App() {
                         >
                           Stop
                         </button>
+                        <button
+                          onClick={() => handleViewLogs(session.sessionId)}
+                          className="log-button"
+                        >
+                          View Logs
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -168,6 +196,23 @@ function App() {
             </div>
           )}
         </section>
+
+        {/* Log Modal */}
+        {logModalOpen && (
+          <div className="log-modal-overlay" onClick={() => setLogModalOpen(false)}>
+            <div className="log-modal" onClick={e => e.stopPropagation()}>
+              <h3>Container Logs ({logSessionId?.substring(0, 8)}...)</h3>
+              {logsLoading ? (
+                <div>Loading logs...</div>
+              ) : logsError ? (
+                <div className="error-message">{logsError}</div>
+              ) : (
+                <pre className="logs-output">{logs}</pre>
+              )}
+              <button onClick={() => setLogModalOpen(false)} className="close-log-modal">Close</button>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
